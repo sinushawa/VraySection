@@ -1,145 +1,24 @@
+struct Sections (ToKeep, Cutter, ToCap, IsEnabled)
+persistent global sectionHolder
 global objToKeep = #()
 global objToCut = #()
 global CopyHolder = #()
 global matLib
 cutSectionRollout
 
-fn textureContainsClass matOrTex classMatoTex =
-(
-	listOfTexturesOfThisClass=#()
-	if (superclassof matOrTex) == Material then
-	(
-		numberOfMaterialsInside= getNumSubMtls matOrTex
-		for i=1 to numberOfMaterialsInside do
-		(
-			matToCheck=getSubMtl matOrTex i
-			if matToCheck!= undefined then
-			(
-				ToAddToTheResult = textureContainsClass matToCheck classMatoTex
-				for j=1 to ToAddToTheResult.Count do
-				(
-					appendIfunique listOfTexturesOfThisClass ToAddToTheResult[j]
-				)
-			)
-		)
-	)
-	numberOfTexturesInside= getNumSubTexmaps matOrTex
-	for i=1 to numberOfTexturesInside do
-	(
-		textureToCheck=getSubTexmap matOrTex i
-		if textureToCheck!= undefined then
-		(
-			if (classof textureToCheck) == classMatoTex then
-			(
-				append listOfTexturesOfThisClass textureToCheck
-			)
-			else
-			(
-				ToAddToTheResult = textureContainsClass textureToCheck classMatoTex
-				for j=1 to ToAddToTheResult.Count do
-				(
-					appendIfUnique listOfTexturesOfThisClass ToAddToTheResult[j]
-				)
-			)
-		)
-	)
-	return listOfTexturesOfThisClass
-)
-
-fn RetrieveOpacityMaps matOrTex =
-(
-	listOfOpacityMaps=#()
-	if (superclassof matOrTex) == Material then
-	(
-		numberOfMaterialsInside= getNumSubMtls matOrTex
-		for i=1 to numberOfMaterialsInside do
-		(
-			matToCheck=getSubMtl matOrTex i
-			if matToCheck!= undefined then
-			(
-				ToAddToTheResult = RetrieveOpacityMaps matToCheck
-				for j=1 to ToAddToTheResult.Count do
-				(
-					appendIfunique listOfOpacityMaps ToAddToTheResult[j]
-				)
-			)
-		)
-	)
-	appendIfunique listOfOpacityMaps matOrTex.texmap_opacity
-	return listOfOpacityMaps
-)
-fn RetrieveAllMats matOrTex =
-(
-	listOfMats=#()
-	if (superclassof matOrTex) == Material then
-	(
-		numberOfMaterialsInside= getNumSubMtls matOrTex
-		for i=1 to numberOfMaterialsInside do
-		(
-			matToCheck=getSubMtl matOrTex i
-			if matToCheck != undefined then
-			(
-				ToAddToTheResult = RetrieveAllMats matToCheck
-				for j=1 to ToAddToTheResult.Count do
-				(
-					appendIfunique listOfMats ToAddToTheResult[j]
-				)
-			)
-		)
-	)
-	if (classof matOrTex) == VRayMtl then
-	(
-		appendIfunique listOfMats matOrTex
-	)
-	return listOfMats
-)
--- typeToReturn 1 if you want to receive ToKeep   2 if you want cut,  objOrName 1 to return the node 2 to return the node name
-fn getObjects typeToReturn objOrName=
-(
-	listOfVrayDistanceTexKeep=#()
-	listOfVrayDistanceTexCut=#()
-	ListOfOptions =#()
-	for i in selection do
-	(
-		if i.mat != undefined then
-		(
-			ToAddToTheResult = textureContainsClass i.mat VrayDistanceTex
-			for j=1 to ToAddToTheResult.Count do
-			(
-				if ToAddToTheResult[j].far_color == white AND ToAddToTheResult[j].near_color == white AND ToAddToTheResult[j].inside_color == black then
-				(
-					for k in ToAddToTheResult[j].objects do
-					(
-						appendIfUnique listOfVrayDistanceTexCut k
-					)
-					appendIfUnique listOfVrayDistanceTexKeep i
-				)
-			)
-		)
-	)
-	append listOfOptions listOfVrayDistanceTexKeep
-	append listOfOptions listOfVrayDistanceTexCut
-	listOfTexsToTreat=listOfOptions[typeToReturn]
-	listOfObjectsToReturn=#()
-	for i in listOfTexsToTreat do
-	(
-		if objOrName==2 then
-		(
-			appendIfUnique listOfObjectsToReturn i.name
-		)
-		else
-		(
-			appendIfUnique listOfObjectsToReturn i
-		)
-	)
-	return listOfObjectsToReturn
-)
-
 fn Init =
 (
 	matLib=loadTempMaterialLibrary "Section.mat"
-	objToKeep = getObjects 1 1
-	objToCut = getObjects 2 1
+)
+fn ComboBoxFill =
+(
+	listSections=#()
+	for i=1 to sectionHolder.Count do
+	(
+		nameS = "section"+(i as string)
+		append listSections nameS
+	)
+	return listSections
 )
 fn UIRefresh =
 (
@@ -233,6 +112,7 @@ fn CheckObjects objectsToCheck =
 
 rollout cutSectionRollout "Cut Section" width:250 height:380
 (	
+	listbox SectionUI items:ComboBoxFill()
 	listbox objectToKeepUI "objects to cut"
 	button addToKeepUI "add" across:2
 	button removeToKeepUI "remove"
