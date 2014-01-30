@@ -1,6 +1,45 @@
-struct lightSystem_struct (sun, dome, sky)
-
-persistent global lightSystem
+lightCA = attributes lightSystem version:1
+(
+	fn viewportChange =
+	(
+		cam=getActiveCamera()
+		if cam != undefined AND cam.modifiers["scene lighting"]!= undefined then
+		(
+			cam.modifiers["scene lighting"].calc_light cam
+		)
+	)
+	parameters main rollout:params
+	(
+		sun type:#node
+		dome type:#node
+		sky type:#node
+	)
+	rollout params "Light System"
+	(
+		pickbutton sunUI "pick a sun"
+		pickbutton domeUI "pick a dome" enabled:false 
+		pickbutton skyUI "pick a sky" enabled:false 
+		
+		on sunUI picked obj do
+		(
+			sun = obj
+			sunUI.text= obj.name
+			domeUI.enabled=true
+		)
+		on domeUI picked obj do
+		(
+			dome = obj
+			domeUI.text= obj.name
+			skyUI.enabled=true
+		)
+		on skyUI picked obj do
+		(
+			sky = obj
+			skyUI.text= obj.name
+			DestroyDialog params
+		)
+	)
+)
 
 viewCA= attributes lightData version:1
 (
@@ -10,12 +49,13 @@ viewCA= attributes lightData version:1
 		(
 			EV=cam.modifiers["scene lighting"].EV
 			OC=cam.modifiers["scene lighting"].OC
-			sun=lightSystem.sun
-			dome=lightSystem.dome
-			sky=lightSystem.sky
+			offset=cam.modifiers["scene lighting"].sky_offset
+			sun=rootNode.custAttributes["lightSystem"].sun
+			dome=rootNode.custAttributes["lightSystem"].dome
+			sky=rootNode.custAttributes["lightSystem"].sky
 			sun.multiplier =(pow 2 (EV))/((OC)*10.0)
 			dome.multiplier =(pow 2 (EV))/((100-OC)*10.0)
-			sky.mat.multiplier = (log(((pow 2 (EV))/((100-OC)*10.0))) +(EV/12)) *EV
+			sky.mat.multiplier = (log(((pow 2 (EV+offset))/((100-OC)*10.0))) +((EV+offset)/12)) *EV
 			sky.mat.texmap.opacity[2] = (EV - 5) *100.0f
 			if cam.modifiers["scene lighting"].sun_position_keep == true then
 			(
@@ -51,7 +91,7 @@ viewCA= attributes lightData version:1
 	(
 		spinner EVUI "Exposure Value" type: #float
 		spinner OCUI "Overcast" type: #float
-		spinner SOUI "Sky offset" type: #float
+		spinner SOUI "Sky offset" type: #float range:[-24,24,0]
 		checkbutton SPKUI "save sun position"
 		 
 		on EVUI changed val do
@@ -59,6 +99,10 @@ viewCA= attributes lightData version:1
 			calc_light selection[1]
 		)
 		on OCUI changed val do
+		(
+			calc_light selection[1]
+		)
+		on SOUI changed val do
 		(
 			calc_light selection[1]
 		)
@@ -80,60 +124,33 @@ viewCA= attributes lightData version:1
 		)
 	)
 )
+fn getValues = 
+(
+	EV_val=1.4427* (log((1000.0*$Dome.multiplier*$Sun.multiplier)/($Dome.multiplier+$Sun.multiplier)))
+	OC_val = (pow 2 (LightTweakerRoll.EV_Sld.value))/(($Sun.multiplier)*10.0)
+)
+fn addLightSysModifier =
+(
+	if (rootNode.custAttributes["lightSystem"] == undefined) then
+	(
+		custAttributes.add rootNode lightCA
+		createDialog rootNode.custAttributes["lightSystem"].params
+	)
+	if (superclassof selection[1]) == camera then
+	(
+		viewLight = EmptyModifier()
+		viewLight.name= "scene lighting"
+		addModifier selection[1] viewLight
+		custAttributes.add selection[1].modifiers["scene lighting"] viewCA
+		try
+		(
+			callbacks.addScript #viewportChange "cam=getActiveCamera() \n if cam != undefined AND cam.modifiers[\"scene lighting\"]!= undefined then (cam.modifiers[\"scene lighting\"].calc_light cam)" id:#CTEV persistent:true
+		)
+		catch
+		(
+			print "callback not added"
+		)
+	)
+)
 
-fn viewportChange =
-(
-	cam=getActiveCamera()
-	if cam != undefined AND cam.modifiers["scene lighting"]!= undefined then
-	(
-		cam.modifiers["scene lighting"].calc_light cam
-	)
-)
-fn selected_cam ev nd = 
-(
-	node_sel =GetAnimByHandle nd[nd.count]
-)
-rollout lightSystemRollout "global light parameters" width:180 height:110
-(
-	pickbutton sunUI "pick a sun"
-	pickbutton domeUI "pick a dome"
-	pickbutton skyUI "pick a sky"
-	
-	on sunUI picked obj do
-	(
-		lightSystem.sun = obj
-		sunUI.text= obj.name
-	)
-	on domeUI picked obj do
-	(
-		lightSystem.dome = obj
-		domeUI.text= obj.name
-	)
-	on skyUI picked obj do
-	(
-		lightSystem.sky = obj
-		skyUI.text= obj.name
-	)
-)
-if (superclassof selection[1]) == camera then
-(
-	viewLight = EmptyModifier()
-	viewLight.name= "scene lighting"
-	addModifier selection[1] viewLight
-	custAttributes.add selection[1].modifiers["scene lighting"] viewCA
-	if lightSystem == undefined OR (isDeleted lightSystem.sun) OR isDeleted (lightSystem.dome) OR (isDeleted lightSystem.sky) then
-	(
-		lightSystem = lightSystem_struct sun:undefined dome:undefined sky:undefined
-		CreateDialog lightSystemRollout
-	)
-	try
-	(
-		callbacks.addScript #viewportChange "viewportChange()" id:#CTEV persistent:true
-		-- unhealthy to have light changing at every camera selection?
-		callbackItem = NodeEventCallback selectionChanged:selected_cam
-	)
-	catch
-	(
-		print "callback not added"
-	)
-)
+addLightSysModifier()
